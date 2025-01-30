@@ -4,6 +4,7 @@
 // TODO: I still don't understand the visible range in cartesian coordinates
 // TODO: Make grid spacing a Vector2
 // TODO: Auto grid spacing doesn't scale well
+// TODO: Scaling moves camera towards the origin
 
 #include <raylib.h>
 #include <raymath.h>
