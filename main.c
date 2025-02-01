@@ -36,6 +36,8 @@
 #define NUMBER_COLOR GRAY
 #define DEBUG_TEXT_COLOR LIME
 #define FUNCTION_LINE_THICKNESS 2.0f
+#define ASYMPTOTE_POINT_RADIUS 4.0f
+#define ASYMPTOTE_POINT_COLOR LIGHTGRAY
 
 // Macros
 #define printf_once(format, ...)           \
@@ -218,11 +220,11 @@ int main(void)
         // Plot functions
         plot(linear, GREEN, resolution);
         // plot(cubic, RED, resolution);
-        plot(sine, YELLOW, resolution);
+        // plot(sine, YELLOW, resolution);
         // plot(tangent, BLUE, resolution);
         // plot(asymptote1, PURPLE, resolution);
         // plot(asymptote2, WHITE, resolution);
-        // plot(asymptote3, ORANGE, resolution);
+        plot(asymptote3, YELLOW, resolution);
 
         // Debug menu
         if (toggle_debug_menu) {
@@ -307,8 +309,11 @@ void plot(func_t f, Color color, double resolution)
         double slope = dy / dx;
 
         if (slope <= -ASYMPTOTE_TOLERANCE * 1.0 / resolution ||
-            slope >= ASYMPTOTE_TOLERANCE * 1.0 / resolution)
-          continue;
+            slope >= ASYMPTOTE_TOLERANCE * 1.0 / resolution) {
+            DrawCircleLines(pjx(x), pjy(0.0), ASYMPTOTE_POINT_RADIUS,
+                            ASYMPTOTE_POINT_COLOR);
+            continue;
+        }
 
         if (toggle_continuous)
             DrawLineEx(pjv(x, y1), pjv(x + resolution, y2),
