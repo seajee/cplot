@@ -2,10 +2,11 @@ CC=gcc
 CFLAGS=-Wall -Wextra -ggdb
 LDFLAGS=`pkg-config --libs raylib` -lm
 
-all: cplot
+all: build/cplot
 
-cplot: main.c
-	$(CC) $(CFLAGS) -o cplot main.c $(LDFLAGS)
+build/cplot: main.c
+	@mkdir -p build/
+	$(CC) $(CFLAGS) -o build/cplot main.c $(LDFLAGS)
 
 clean:
-	rm cplot
+	rm -rf build/
