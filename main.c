@@ -32,6 +32,7 @@
 #define TOGGLE_CONTINUOUS_DEFAULT true
 #define TOGGLE_DEBUG_MENU_DEFAULT false
 #define TOGGLE_GRID_DEFAULT true
+#define CACHE_CAPACITY (8*1024)
 
 // Styling
 #define GRID_COLOR DARKGRAY
@@ -53,7 +54,7 @@ Vector2 rpjv(double x, double y);
 double rpjx(double x);
 double rpjy(double y);
 void plot(func_t f, Color color, double resolution);
-void plot_parser(MP_Env *parser, Color color, double resolution);
+size_t plot_parser(MP_Env *parser, Vector2 *buf, size_t buf_size, double resolution);
 double max(double a, double b);
 double map(double value, double x1, double x2, double y1, double y2);
 bool is_near(double x, double target);
@@ -76,13 +77,21 @@ bool toggle_continuous = TOGGLE_CONTINUOUS_DEFAULT;
 bool toggle_debug_menu = TOGGLE_DEBUG_MENU_DEFAULT;
 bool toggle_grid = TOGGLE_GRID_DEFAULT;
 
+Vector2 cache[CACHE_CAPACITY];
+size_t cache_count = 0;
+Vector2 prev_camera = {1.0f, 1.0f};
+Vector2 prev_scale = {0};
+bool has_panned = false;
+
 int main(void)
 {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "cplot");
+    SetTargetFPS(60);
 
-    const char *expr = "x * x";
+    const char *expr = "(x*x + 1) / ((x*x - 1) * (x - 3))";
     MP_Env *parser = mp_init(expr);
+    assert(parser != NULL);
 
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
@@ -131,6 +140,15 @@ int main(void)
             // Adapt grid spacing based on scaling
             if (is_near(fmod(scale.x, 100.0), 0.0))
                 grid_spacing *= 2.0;
+        }
+
+        // Handle movement events
+        if (!Vector2Equals(prev_camera, camera)|| !Vector2Equals(prev_scale, scale)) {
+            has_panned = true;
+            prev_scale = scale;
+            prev_camera = camera;
+        } else {
+            has_panned = false;
         }
 
         // Resolution
@@ -222,7 +240,31 @@ int main(void)
         // plot(asymptote1, PURPLE, resolution);
         // plot(asymptote2, WHITE, resolution);
         // plot(asymptote3, YELLOW, resolution);
-        plot_parser(parser, WHITE, resolution);
+        if (has_panned) {
+            cache_count = plot_parser(parser, cache, CACHE_CAPACITY, resolution);
+        }
+        for (int i = 0; i < (int)cache_count - 1; ++i) {
+            double y1 = cache[i].y;
+            double y2 = cache[i + 1].y;
+
+            double dy = y2 - y1;
+            double dx = resolution;
+            double slope = dy / dx;
+
+            if (slope <= -ASYMPTOTE_TOLERANCE * 1.0 / resolution ||
+                slope >= ASYMPTOTE_TOLERANCE * 1.0 / resolution) {
+                DrawCircleLines(pjx(cache[i].x), pjy(0.0), ASYMPTOTE_POINT_RADIUS,
+                                ASYMPTOTE_POINT_COLOR);
+                continue;
+            }
+
+            if (toggle_continuous)
+                DrawLineEx(pjv(cache[i].x, y1), pjv(cache[i].x + resolution, y2),
+                           FUNCTION_LINE_THICKNESS, WHITE);
+            else
+                DrawCircleV(pjv(cache[i].x, y1), 2.0f, WHITE);
+        }
+
 
         // Debug menu
         if (toggle_debug_menu) {
@@ -322,34 +364,20 @@ void plot(func_t f, Color color, double resolution)
     }
 }
 
-void plot_parser(MP_Env *parser, Color color, double resolution)
+size_t plot_parser(MP_Env *parser, Vector2 *buf, size_t buf_size, double resolution)
 {
     double x1 = rpjx(0.0);
     double x2 = rpjx(GetScreenWidth());
 
-    for (double x = x1; x <= x2; x += resolution) {
+    size_t point_count = 0;
+    for (double x = x1; x <= x2 && point_count < buf_size; x += resolution) {
         mp_variable(parser, 'x', x);
-        double y1 = mp_evaluate(parser).value;
-        mp_variable(parser, 'x', x + resolution);
-        double y2 = mp_evaluate(parser).value;
-
-        double dy = y2 - y1;
-        double dx = resolution;
-        double slope = dy / dx;
-
-        if (slope <= -ASYMPTOTE_TOLERANCE * 1.0 / resolution ||
-            slope >= ASYMPTOTE_TOLERANCE * 1.0 / resolution) {
-            DrawCircleLines(pjx(x), pjy(0.0), ASYMPTOTE_POINT_RADIUS,
-                            ASYMPTOTE_POINT_COLOR);
-            continue;
-        }
-
-        if (toggle_continuous)
-            DrawLineEx(pjv(x, y1), pjv(x + resolution, y2),
-                       FUNCTION_LINE_THICKNESS, color);
-        else
-            DrawCircleV(pjv(x, y1), 2.0f, color);
+        buf[point_count].x = x;
+        buf[point_count].y = mp_evaluate(parser).value;
+        ++point_count;
     }
+
+    return point_count;
 }
 
 double max(double a, double b)
