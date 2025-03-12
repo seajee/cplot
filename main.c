@@ -1,3 +1,4 @@
+// TODOO: Recompute cache on window resize
 // TODO: Dynamically change resolution (maybe not necessary)
 // TODO: Dynamically change asymptote tolerance based on resolution
 // TODO: Implement dynamic theme configuration
@@ -83,15 +84,29 @@ Vector2 prev_camera = {1.0f, 1.0f};
 Vector2 prev_scale = {0};
 bool has_panned = false;
 
-int main(void)
+int main(int argc, char **argv)
 {
+    /* Argv */
+
+    if (argc <= 1) {
+        fprintf(stderr, "ERROR: No expression provided\n");
+        fprintf(stderr, "Usage: %s <expression>\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    /* Initialization */
+
+    const char *expr = argv[1];
+    MP_Env *parser = mp_init(expr);
+    if (parser == NULL) {
+        fprintf(stderr, "ERROR: Could not compile expression\n");
+        return EXIT_FAILURE;
+    }
+
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
+    SetTraceLogLevel(LOG_WARNING);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "cplot");
     SetTargetFPS(60);
-
-    const char *expr = "(x*x + 1) / ((x*x - 1) * (x - 3))";
-    MP_Env *parser = mp_init(expr);
-    assert(parser != NULL);
 
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
@@ -260,9 +275,9 @@ int main(void)
 
             if (toggle_continuous)
                 DrawLineEx(pjv(cache[i].x, y1), pjv(cache[i].x + resolution, y2),
-                           FUNCTION_LINE_THICKNESS, WHITE);
+                           FUNCTION_LINE_THICKNESS, YELLOW);
             else
-                DrawCircleV(pjv(cache[i].x, y1), 2.0f, WHITE);
+                DrawCircleV(pjv(cache[i].x, y1), 2.0f, YELLOW);
         }
 
 
