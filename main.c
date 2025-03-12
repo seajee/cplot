@@ -1,4 +1,3 @@
-// TODOO: Recompute cache on window resize
 // TODO: Dynamically change resolution (maybe not necessary)
 // TODO: Dynamically change asymptote tolerance based on resolution
 // TODO: Implement dynamic theme configuration
@@ -82,6 +81,7 @@ Vector2 cache[CACHE_CAPACITY];
 size_t cache_count = 0;
 Vector2 prev_camera = {1.0f, 1.0f};
 Vector2 prev_scale = {0};
+Vector2 prev_window_size = {0};
 bool has_panned = false;
 
 int main(int argc, char **argv)
@@ -112,6 +112,10 @@ int main(int argc, char **argv)
         float dt = GetFrameTime();
         int width = GetScreenWidth();
         int height = GetScreenHeight();
+        Vector2 window_size = {
+            .x = width,
+            .y = height
+        };
 
         /* Input */
 
@@ -158,10 +162,13 @@ int main(int argc, char **argv)
         }
 
         // Handle movement events
-        if (!Vector2Equals(prev_camera, camera)|| !Vector2Equals(prev_scale, scale)) {
+        if (!Vector2Equals(prev_camera, camera)
+            || !Vector2Equals(prev_scale, scale)
+            || !Vector2Equals(prev_window_size, window_size)) {
             has_panned = true;
             prev_scale = scale;
             prev_camera = camera;
+            prev_window_size = window_size;
         } else {
             has_panned = false;
         }
