@@ -13,6 +13,9 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#define MP_IMPLEMENTATION
+#include "mp.h"
+
 /* Macros */
 
 // Constants
@@ -39,16 +42,6 @@
 #define ASYMPTOTE_POINT_RADIUS 4.0f
 #define ASYMPTOTE_POINT_COLOR LIGHTGRAY
 
-// Macros
-#define printf_once(format, ...)           \
-    do {                                   \
-        static bool t = true;              \
-        if (t) {                           \
-            printf((format), __VA_ARGS__); \
-            t = false;                     \
-        }                                  \
-    } while (0)
-
 /* Declarations */
 
 typedef double (*func_t)(double);
@@ -60,6 +53,7 @@ Vector2 rpjv(double x, double y);
 double rpjx(double x);
 double rpjy(double y);
 void plot(func_t f, Color color, double resolution);
+void plot_parser(MP_Env *parser, Color color, double resolution);
 double max(double a, double b);
 double map(double value, double x1, double x2, double y1, double y2);
 bool is_near(double x, double target);
@@ -86,6 +80,9 @@ int main(void)
 {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "cplot");
+
+    const char *expr = "x * x";
+    MP_Env *parser = mp_init(expr);
 
     while (!WindowShouldClose()) {
         float dt = GetFrameTime();
@@ -218,13 +215,14 @@ int main(void)
         }
 
         // Plot functions
-        plot(linear, GREEN, resolution);
+        // plot(linear, GREEN, resolution);
         // plot(cubic, RED, resolution);
         // plot(sine, YELLOW, resolution);
         // plot(tangent, BLUE, resolution);
         // plot(asymptote1, PURPLE, resolution);
         // plot(asymptote2, WHITE, resolution);
-        plot(asymptote3, YELLOW, resolution);
+        // plot(asymptote3, YELLOW, resolution);
+        plot_parser(parser, WHITE, resolution);
 
         // Debug menu
         if (toggle_debug_menu) {
@@ -245,6 +243,7 @@ int main(void)
         EndDrawing();
     }
 
+    mp_free(parser);
     CloseWindow();
 
     return EXIT_SUCCESS;
@@ -303,6 +302,36 @@ void plot(func_t f, Color color, double resolution)
     for (double x = x1; x <= x2; x += resolution) {
         double y1 = f(x);
         double y2 = f(x + resolution);
+
+        double dy = y2 - y1;
+        double dx = resolution;
+        double slope = dy / dx;
+
+        if (slope <= -ASYMPTOTE_TOLERANCE * 1.0 / resolution ||
+            slope >= ASYMPTOTE_TOLERANCE * 1.0 / resolution) {
+            DrawCircleLines(pjx(x), pjy(0.0), ASYMPTOTE_POINT_RADIUS,
+                            ASYMPTOTE_POINT_COLOR);
+            continue;
+        }
+
+        if (toggle_continuous)
+            DrawLineEx(pjv(x, y1), pjv(x + resolution, y2),
+                       FUNCTION_LINE_THICKNESS, color);
+        else
+            DrawCircleV(pjv(x, y1), 2.0f, color);
+    }
+}
+
+void plot_parser(MP_Env *parser, Color color, double resolution)
+{
+    double x1 = rpjx(0.0);
+    double x2 = rpjx(GetScreenWidth());
+
+    for (double x = x1; x <= x2; x += resolution) {
+        mp_variable(parser, 'x', x);
+        double y1 = mp_evaluate(parser).value;
+        mp_variable(parser, 'x', x + resolution);
+        double y2 = mp_evaluate(parser).value;
 
         double dy = y2 - y1;
         double dx = resolution;
