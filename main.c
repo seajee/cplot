@@ -21,7 +21,6 @@
 // Constants
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 800
-#define CAMERA_SPEED 50.0
 #define ZOOM_FACTOR 5.0
 #define ZOOM_DEFAULT 50.0
 #define ZOOM_MIN 5.0
@@ -109,7 +108,6 @@ int main(int argc, char **argv)
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
-        float dt = GetFrameTime();
         int width = GetScreenWidth();
         int height = GetScreenHeight();
         Vector2 window_size = {
@@ -127,14 +125,6 @@ int main(int argc, char **argv)
         }
 
         // Keyboard camera movement
-        if (IsKeyDown(KEY_W)) // Up
-            camera.y += CAMERA_SPEED * dt;
-        if (IsKeyDown(KEY_A)) // Left
-            camera.x -= CAMERA_SPEED * dt;
-        if (IsKeyDown(KEY_S)) // Down
-            camera.y -= CAMERA_SPEED * dt;
-        if (IsKeyDown(KEY_D)) // Right
-            camera.x += CAMERA_SPEED * dt;
         if (IsKeyPressed(KEY_O)) { // Back to origin
             camera.x = 0.0f;
             camera.y = 0.0f;
