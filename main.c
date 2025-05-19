@@ -31,7 +31,9 @@
 #define TOGGLE_CONTINUOUS_DEFAULT true
 #define TOGGLE_DEBUG_MENU_DEFAULT false
 #define TOGGLE_GRID_DEFAULT true
-#define CACHE_CAPACITY (16*1024)
+#define TOGGLE_INPUT_DEFAULT false
+#define CACHE_CAPACITY (32*1024)
+#define INPUT_CAPACITY 32
 
 // Styling
 #define GRID_COLOR DARKGRAY
@@ -41,10 +43,14 @@
 #define FUNCTION_LINE_THICKNESS 2.0f
 #define ASYMPTOTE_POINT_RADIUS 4.0f
 #define ASYMPTOTE_POINT_COLOR LIGHTGRAY
+#define TEXT_BOX_BACKGROUND LIGHTGRAY
+#define TEXT_BOX_COLOR BLACK
 
 /* Declarations */
 
 typedef double (*func_t)(double);
+
+void text_box(void);
 
 Vector2 pjv(double x, double y);
 double pjx(double x);
@@ -75,6 +81,7 @@ double grid_spacing = GRID_SPACING_DEFAULT;
 bool toggle_continuous = TOGGLE_CONTINUOUS_DEFAULT;
 bool toggle_debug_menu = TOGGLE_DEBUG_MENU_DEFAULT;
 bool toggle_grid = TOGGLE_GRID_DEFAULT;
+bool toggle_input = TOGGLE_INPUT_DEFAULT;
 
 Vector2 cache[CACHE_CAPACITY];
 size_t cache_count = 0;
@@ -82,30 +89,30 @@ Vector2 prev_camera = {1.0f, 1.0f};
 Vector2 prev_scale = {0};
 Vector2 prev_window_size = {0};
 bool has_panned = false;
+bool input_error = false;
+
+char input[INPUT_CAPACITY + 1] = "\0";
 
 int main(int argc, char **argv)
 {
     /* Argv */
 
+    const char *expr = NULL;
+
     if (argc <= 1) {
-        fprintf(stderr, "ERROR: No expression provided\n");
-        fprintf(stderr, "Usage: %s <expression>\n", argv[0]);
-        return EXIT_FAILURE;
+        toggle_input = true;
+    } else {
+        expr = argv[1];
     }
 
     /* Initialization */
-
-    const char *expr = argv[1];
-    MP_Env *parser = mp_init(expr);
-    if (parser == NULL) {
-        fprintf(stderr, "ERROR: Could not compile expression\n");
-        return EXIT_FAILURE;
-    }
 
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_MSAA_4X_HINT);
     SetTraceLogLevel(LOG_WARNING);
     InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "cplot");
     SetTargetFPS(60);
+
+    MP_Env *parser = mp_init(expr);
 
     while (!WindowShouldClose()) {
         int width = GetScreenWidth();
@@ -117,75 +124,82 @@ int main(int argc, char **argv)
 
         /* Input */
 
-        // Mouse drag camera movement
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            Vector2 delta = GetMouseDelta();
-            delta.x *= -1.0f;
-            camera = Vector2Add(camera, delta);
-        }
+        // Give priority to the input text box
+        if (!toggle_input) {
+            // Mouse drag camera movement
+            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+                Vector2 delta = GetMouseDelta();
+                delta.x *= -1.0f;
+                camera = Vector2Add(camera, delta);
+            }
 
-        // Keyboard camera movement
-        if (IsKeyPressed(KEY_O)) { // Back to origin
-            camera.x = 0.0f;
-            camera.y = 0.0f;
-            scale.x = ZOOM_DEFAULT;
-            scale.y = ZOOM_DEFAULT;
-            grid_spacing = GRID_SPACING_DEFAULT;
-        }
+            // Keyboard camera movement
+            if (IsKeyPressed(KEY_O)) { // Back to origin
+                camera.x = 0.0f;
+                camera.y = 0.0f;
+                scale.x = ZOOM_DEFAULT;
+                scale.y = ZOOM_DEFAULT;
+                grid_spacing = GRID_SPACING_DEFAULT;
+            }
 
-        // Zoom
-        if (GetMouseWheelMove() > 0.0f) {
-            scale.x += ZOOM_FACTOR;
-            scale.y += ZOOM_FACTOR;
+            // Zoom
+            if (GetMouseWheelMove() > 0.0f) {
+                scale.x += ZOOM_FACTOR;
+                scale.y += ZOOM_FACTOR;
 
-            // Adapt grid spacing based on scaling
-            if (is_near(fmod(scale.x, 100.0), 0.0))
-                grid_spacing /= 2.0;
-        }
-        if (GetMouseWheelMove() < 0.0f) {
-            scale.x = max(ZOOM_MIN, scale.x - ZOOM_FACTOR);
-            scale.y = max(ZOOM_MIN, scale.y - ZOOM_FACTOR);
+                // Adapt grid spacing based on scaling
+                if (is_near(fmod(scale.x, 100.0), 0.0))
+                    grid_spacing /= 2.0;
+            }
+            if (GetMouseWheelMove() < 0.0f) {
+                scale.x = max(ZOOM_MIN, scale.x - ZOOM_FACTOR);
+                scale.y = max(ZOOM_MIN, scale.y - ZOOM_FACTOR);
 
-            // Adapt grid spacing based on scaling
-            if (is_near(fmod(scale.x, 100.0), 0.0))
+                // Adapt grid spacing based on scaling
+                if (is_near(fmod(scale.x, 100.0), 0.0))
+                    grid_spacing *= 2.0;
+            }
+
+            // Handle movement events
+            if (!Vector2Equals(prev_camera, camera)
+                    || !Vector2Equals(prev_scale, scale)
+                    || !Vector2Equals(prev_window_size, window_size)) {
+                has_panned = true;
+                prev_scale = scale;
+                prev_camera = camera;
+                prev_window_size = window_size;
+            } else {
+                has_panned = false;
+            }
+
+            // Resolution
+            if (IsKeyPressed(KEY_R)) {
+                resolution /= 2.0;
+                has_panned = true;
+            }
+            if (IsKeyPressed(KEY_F)) {
+                resolution *= 2.0;
+                has_panned = true;
+            }
+
+            // Grid spacing
+            if (IsKeyPressed(KEY_P))
                 grid_spacing *= 2.0;
-        }
+            if (IsKeyPressed(KEY_L))
+                grid_spacing /= 2.0;
 
-        // Handle movement events
-        if (!Vector2Equals(prev_camera, camera)
-            || !Vector2Equals(prev_scale, scale)
-            || !Vector2Equals(prev_window_size, window_size)) {
-            has_panned = true;
-            prev_scale = scale;
-            prev_camera = camera;
-            prev_window_size = window_size;
-        } else {
-            has_panned = false;
+            // Toggles
+            if (IsKeyPressed(KEY_C))
+                toggle_continuous = !toggle_continuous;
+            if (IsKeyPressed(KEY_B))
+                toggle_debug_menu = !toggle_debug_menu;
+            if (IsKeyPressed(KEY_G))
+                toggle_grid = !toggle_grid;
         }
-
-        // Resolution
-        if (IsKeyPressed(KEY_R)) {
-            resolution /= 2.0;
-            has_panned = true;
+        if (IsKeyPressed(KEY_ENTER)) {
+            toggle_input = !toggle_input;
+            SetMouseCursor(MOUSE_CURSOR_DEFAULT);
         }
-        if (IsKeyPressed(KEY_F)) {
-            resolution *= 2.0;
-            has_panned = true;
-        }
-
-        // Grid spacing
-        if (IsKeyPressed(KEY_P))
-            grid_spacing *= 2.0;
-        if (IsKeyPressed(KEY_L))
-            grid_spacing /= 2.0;
-
-        // Toggles
-        if (IsKeyPressed(KEY_C))
-            toggle_continuous = !toggle_continuous;
-        if (IsKeyPressed(KEY_B))
-            toggle_debug_menu = !toggle_debug_menu;
-        if (IsKeyPressed(KEY_G))
-            toggle_grid = !toggle_grid;
 
         /* Rendering */
 
@@ -298,6 +312,20 @@ int main(int argc, char **argv)
                  // 30, height - 30, 20, WHITE);
                  mouse.x - 60.0f, mouse.y + 20.0f, 20, WHITE);
 
+        // Handle the input text screen
+        if (toggle_input) {
+            text_box();
+            MP_Env *new_parser = mp_init(input);
+            if (new_parser == NULL) {
+                input_error = true;
+            } else {
+                input_error = false;
+                mp_free(parser);
+                parser = new_parser;
+                has_panned = true;
+            }
+        }
+
         EndDrawing();
     }
 
@@ -310,6 +338,84 @@ int main(int argc, char **argv)
 Vector2 pjv(double x, double y)
 {
     return (Vector2){pjx(x), pjy(y)};
+}
+
+// https://www.raylib.com/examples/text/loader.html?name=text_input_box
+void text_box(void)
+{
+    if (!toggle_input)
+        return;
+
+    static int letter_count = 0;
+    static bool mouse_on_text = false;
+    static int frames_count = 0;
+
+    int w = GetScreenWidth();
+    Rectangle text_box = {
+        w/2.0f - w/3.0f, GetScreenHeight()/2.5f,
+        w/1.5f, 50 };
+
+    mouse_on_text = CheckCollisionPointRec(GetMousePosition(), text_box);
+
+    if (mouse_on_text) {
+        SetMouseCursor(MOUSE_CURSOR_IBEAM);
+        int key = GetCharPressed();
+
+        while (key > 0) {
+            if ((key >= 32) && (key <= 125)
+                    && (letter_count < INPUT_CAPACITY)) {
+                input[letter_count] = (char)key;
+                input[letter_count + 1] = '\0';
+                letter_count++;
+            }
+
+            key = GetCharPressed();
+        }
+
+        if (IsKeyPressed(KEY_BACKSPACE)) {
+            letter_count--;
+            if (letter_count < 0) letter_count = 0;
+            input[letter_count] = '\0';
+        }
+    } else {
+        SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+    }
+
+    if (mouse_on_text)
+        frames_count++;
+    else
+        frames_count = 0;
+
+    // Render input box
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), GetColor(0x181818AA));
+
+    DrawRectangleRec(text_box, TEXT_BOX_BACKGROUND);
+
+    if (input_error) {
+        DrawRectangleLines((int)text_box.x, (int)text_box.y,
+                (int)text_box.width, (int)text_box.height, RED);
+    } else {
+        if (mouse_on_text)
+            DrawRectangleLines((int)text_box.x, (int)text_box.y,
+                    (int)text_box.width, (int)text_box.height, WHITE);
+        else
+            DrawRectangleLines((int)text_box.x, (int)text_box.y,
+                    (int)text_box.width, (int)text_box.height, DARKGRAY);
+    }
+
+    DrawText("Input function", (int)text_box.x + 5, (int)text_box.y - 30, 30,
+            TEXT_BOX_BACKGROUND);
+    DrawText(input, (int)text_box.x + 5, (int)text_box.y + 8, 40,
+            TEXT_BOX_COLOR);
+
+    if (mouse_on_text) {
+        if (letter_count < INPUT_CAPACITY) {
+            // Draw blinking underscore char
+            if (((frames_count / 20) % 2) == 0)
+                DrawText("_", (int)text_box.x + 8 + MeasureText(input, 40),
+                        (int)text_box.y + 12, 40, TEXT_BOX_COLOR);
+        }
+    }
 }
 
 double pjx(double x)
