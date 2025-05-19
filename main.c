@@ -31,7 +31,7 @@
 #define TOGGLE_CONTINUOUS_DEFAULT true
 #define TOGGLE_DEBUG_MENU_DEFAULT false
 #define TOGGLE_GRID_DEFAULT true
-#define CACHE_CAPACITY (8*1024)
+#define CACHE_CAPACITY (16*1024)
 
 // Styling
 #define GRID_COLOR DARKGRAY
@@ -164,10 +164,14 @@ int main(int argc, char **argv)
         }
 
         // Resolution
-        if (IsKeyPressed(KEY_R))
+        if (IsKeyPressed(KEY_R)) {
             resolution /= 2.0;
-        if (IsKeyPressed(KEY_F))
+            has_panned = true;
+        }
+        if (IsKeyPressed(KEY_F)) {
             resolution *= 2.0;
+            has_panned = true;
+        }
 
         // Grid spacing
         if (IsKeyPressed(KEY_P))
