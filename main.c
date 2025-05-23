@@ -63,7 +63,6 @@ size_t plot_parser(MP_Env *parser, Vector2 *buf, size_t buf_size, double resolut
 double max(double a, double b);
 double map(double value, double x1, double x2, double y1, double y2);
 bool is_near(double x, double target);
-void fill_constants(MP_Env *mp);
 
 double cubic(double x);
 double linear(double x);
@@ -114,7 +113,6 @@ int main(int argc, char **argv)
     SetTargetFPS(60);
 
     MP_Env *parser = mp_init(expr);
-    fill_constants(parser);
 
     while (!WindowShouldClose()) {
         int width = GetScreenWidth();
@@ -318,7 +316,6 @@ int main(int argc, char **argv)
         if (toggle_input) {
             text_box();
             MP_Env *new_parser = mp_init(input);
-            fill_constants(parser);
             if (new_parser == NULL) {
                 input_error = true;
             } else {
@@ -521,16 +518,6 @@ double map(double value, double x1, double x2, double y1, double y2)
 bool is_near(double x, double target)
 {
     return (target - EPSILON < x) && (x < target + EPSILON);
-}
-
-void fill_constants(MP_Env *mp)
-{
-    if (mp == NULL) {
-        return;
-    }
-
-    mp_variable(mp, 'e', exp(1.0));
-    mp_variable(mp, 'p', PI);
 }
 
 double cubic(double x)
